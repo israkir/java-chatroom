@@ -16,10 +16,9 @@ public class Client implements Runnable {
 	BufferedReader stdin;
 	String userInput;
 	String channel = "default";
+	boolean login = true;
 
-	public Client(String host, int port) {
-		boolean login = true;
-
+	public Client(String host, int port) {	
 		try {
 			socket = new Socket(host, port);
 			System.out.println("Connected to [" + socket + "]");
@@ -31,19 +30,13 @@ public class Client implements Runnable {
 			System.out.print("LOGIN:> ");
 			stdin = new BufferedReader(new InputStreamReader(System.in));
 
-			while((userInput = stdin.readLine()) != null) {
-				if (login) {
-					setNickname(userInput);
-					out.println(userInput);
-					login = false;
-				} else {
-					out.println(nickname + ": " + userInput);
-				}
-			}
+			userInput = stdin.readLine();
+			setNickname(userInput);
+			out.println(userInput);
 
-			out.close();
-			in.close();
-			stdin.close();
+			while((userInput = stdin.readLine()) != null) {
+				out.println(nickname + ": " + userInput);
+			}
 
 		} catch (UnknownHostException e) {
 			e.printStackTrace();
@@ -63,7 +56,7 @@ public class Client implements Runnable {
 	public void run() {
 		String serverMessage = null;
 		try {
-			while((serverMessage = in.readLine()) != null) {
+			while ((serverMessage = in.readLine()) != null) {
 				System.out.println(serverMessage);
 			}
 		} catch (IOException ex) {

@@ -7,7 +7,9 @@ import java.net.Socket;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.Iterator;
+import java.util.Set;
 
 
 public class Server {
@@ -20,7 +22,7 @@ public class Server {
 		User user;
 		Channel userChannel;
 		BufferedReader in;
-		PrintWriter out;
+		boolean login = true;
 
 		public ClientHandler(Socket s, Channel ch) {
 			try {
@@ -28,7 +30,6 @@ public class Server {
 				userChannel = ch;
 				user = new User(clientSocket, defaultChannel.getName());
 				in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
-				out = new PrintWriter(clientSocket.getOutputStream());
 			} catch (Exception ex) {
 				ex.printStackTrace();
 			}
@@ -41,28 +42,60 @@ public class Server {
 			String today = sdf.format(date);
 			String message = null;
 			String nickname = null;
-			boolean login = true;
 
 			try {
-				while((message = in.readLine()) != null) {
-					if (login) {
-						nickname = message;
-						user.setUsername(nickname);
-						userChannel.addUser(user);
-						notifyAllUsers(userChannel, user);
-						//userChannel.listUsersInChannel();
-						System.out.println(nickname + " login from " + 
+				nickname = in.readLine();
+				user.setUsername(nickname);
+				userChannel.addUser(user);
+				notifyAllUsers(userChannel, user);
+				System.out.println(nickname + " login from " +
 								clientSocket.getLocalSocketAddress() + " @ " + today);
-						login = false;
+				notifyUserChannel(user);
+
+				while((message = in.readLine()) != null) {
+					if (message.contains(": /tell")) {
+						commandTell(userChannel, message);
+						notifyUserChannel(user);
 					} else {
 						System.out.println("Sending all: [" + message + "]...");
 						sendAllInChannel(userChannel, user, message);
+						notifyUserChannel(user);
 					}
+					
 				}
 			} catch (Exception ex) {
 				ex.printStackTrace();
 			}
 		}
+
+		public void commandTell(Channel ch, String m) {
+			String[] separate = m.split(" ");
+			String username = separate[2];
+			String message = separate[0].substring(0,
+									separate[0].length()-1) + " tells you: ";
+
+			for(int i=3; i<separate.length; i++)
+				message += separate[i] + " ";
+
+			tellUser(ch, username, message);
+		}
+
+		public void tellUser(Channel ch, String username, String message) {
+			User u = null;
+			PrintWriter out = null;
+
+			if ((u = ch.getUser(username)) != null) {
+				out = u.getUserOutputStream();
+				out.println(message + "\n#" + u.getCurrentChannel() + ":> ");
+				out.flush();
+			} else {
+				out = u.getUserOutputStream();
+				out.println("Warning:" + username + " is not in channel!" +
+									"\n#" + u.getCurrentChannel() + ":> ");
+				out.flush();
+			}
+		}
+
 	}
 	
 	public static void main(String[] args) {
@@ -89,7 +122,6 @@ public class Server {
 				clientSocket = ss.accept();
 				Thread t = new Thread(new ClientHandler(clientSocket, defaultChannel));
 				t.start();
-				//System.out.println("[" + clientSocket + "] connected.");
 			}
 			
 		} catch (Exception ex) {
@@ -105,14 +137,15 @@ public class Server {
 
 		while (channelIt.hasNext()) {
 			ch = (Channel) channelIt.next();
-			Iterator userIt = ch.getAllUsers().iterator();
-			while(userIt.hasNext()) {
-				usr = (User) userIt.next();
+			Set keys = ch.getAllUsers().keySet();
+			for (Iterator i = keys.iterator(); i.hasNext();) {
+				usr = ch.getUser((String) i.next());
 				try {
 					if (!usr.getUsername().equals(u.getUsername())) {
 						out = usr.getUserOutputStream();
 						out.println("** User " + u.getUsername() +
-								" joined " + ch.getName() + " channel");
+								" joined #" + ch.getName() + " channel\n" +
+								"#" + usr.getCurrentChannel() + ":> ");
 						out.flush();
 					}
 				} catch (Exception e1) {
@@ -123,17 +156,17 @@ public class Server {
 	}
 
 	public void sendAllInChannel(Channel ch, User u, String message) {
-		ArrayList users = ch.getAllUsers();
-		Iterator userIt = users.iterator();
+		HashMap<String, User> users = ch.getAllUsers();
+		Set keys = ch.getAllUsers().keySet();
 		PrintWriter out = null;
 		User usr = null;
 
-		while(userIt.hasNext()) {
-			usr = (User) userIt.next();
+		for (Iterator i = keys.iterator(); i.hasNext(); ) {
+			usr = ch.getUser((String) i.next());
 			try {
 				if (!usr.getUsername().equals(u.getUsername())) {
 					out = usr.getUserOutputStream();
-					out.println(message);
+					out.println(message + "\n#" + usr.getCurrentChannel() + ":> ");
 					out.flush();
 				}
 			} catch (Exception e1) {
@@ -142,17 +175,37 @@ public class Server {
 		}
 	}
 
-/*
-	void removeConnection(Socket socket) {
-		synchronized(outputStreams) {
-			System.out.println("Removing connection: " + socket);
-			outputStreams.remove(socket);
-			try {
-				socket.close();
-			} catch (IOException e) {
-				e.printStackTrace();
-			}
+	public boolean isAvailable(Channel ch, String name) {
+		Set keys = ch.getAllUsers().keySet();
+		Iterator userIt = keys.iterator();
+		User usr = null;
+
+		while (userIt.hasNext()) {
+			usr = (User) userIt.next();
+			if (usr.getUsername().equals(name))
+				return false;
+		}
+ 		return true;
+	}
+
+	public void notifyError(User u, int i) {
+		PrintWriter out = u.getUserOutputStream();
+		switch(i) {
+			case 0:
+				out.println("Error:login");
+				out.flush();
+				break;
 		}
 	}
-*/
+
+	public void notifyUserChannel(User u) {
+		PrintWriter out = u.getUserOutputStream();
+		try {
+			out.println("#" + u.getCurrentChannel() + ":> ");
+			out.flush();
+		} catch (Exception e1) {
+			e1.printStackTrace();
+		}
+	}
+
 }
