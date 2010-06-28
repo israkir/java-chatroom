@@ -4,29 +4,31 @@ import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.Date;
 import java.util.Iterator;
 
 
 public class Server {
-	private ArrayList<Channel> allChannels = new ArrayList<Channel>();
-	private HashMap users = new HashMap();
+	private ArrayList<Channel> channelList = new ArrayList<Channel>();
 	private ServerSocket ss;
 	Channel defaultChannel;
 
 	public class ClientHandler implements Runnable {
+		Socket clientSocket;
+		User user;
+		Channel userChannel;
 		BufferedReader in;
 		PrintWriter out;
-		Socket socket;
 
-		public ClientHandler(Socket clientSocket) {
+		public ClientHandler(Socket s, Channel ch) {
 			try {
-				socket = clientSocket;
-				in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-				out = new PrintWriter(socket.getOutputStream());
-				out.print("#" + defaultChannel.getName() + ":> ");
-				out.flush();
+				clientSocket = s;
+				userChannel = ch;
+				user = new User(clientSocket, defaultChannel.getName());
+				in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
+				out = new PrintWriter(clientSocket.getOutputStream());
 			} catch (Exception ex) {
 				ex.printStackTrace();
 			}
@@ -34,6 +36,9 @@ public class Server {
 
 		@Override
 		public void run() {
+			SimpleDateFormat sdf = new SimpleDateFormat("EEE, d MMM yyyy HH:mm:ss Z");
+			Date date = new Date();
+			String today = sdf.format(date);
 			String message = null;
 			String nickname = null;
 			boolean login = true;
@@ -42,18 +47,22 @@ public class Server {
 				while((message = in.readLine()) != null) {
 					if (login) {
 						nickname = message;
-						notifyAllUsers(nickname);
+						user.setUsername(nickname);
+						userChannel.addUser(user);
+						notifyAllUsers(userChannel, user);
+						//userChannel.listUsersInChannel();
+						System.out.println(nickname + " login from " + 
+								clientSocket.getLocalSocketAddress() + " @ " + today);
 						login = false;
 					} else {
 						System.out.println("Sending all: [" + message + "]...");
-						sendAllInChannel(defaultChannel, message);
+						sendAllInChannel(userChannel, user, message);
 					}
 				}
 			} catch (Exception ex) {
 				ex.printStackTrace();
 			}
 		}
-		
 	}
 	
 	public static void main(String[] args) {
@@ -68,23 +77,19 @@ public class Server {
 
 	private void listen(int port) throws IOException {
 		Socket clientSocket = null;
-		PrintWriter out = null;
-		BufferedReader in = null;
-		BufferedReader stdin = null;
 
 		try {
 			ss = new ServerSocket(port);
-			System.out.println("I am listening on [" + ss + "]...");
+			System.out.println("Server is listening on: " +
+					ss.getLocalSocketAddress());
 			defaultChannel = new Channel("default");
-			allChannels.add(defaultChannel);
+			channelList.add(defaultChannel);
 
 			while(true) {
 				clientSocket = ss.accept();
-				out = new PrintWriter(clientSocket.getOutputStream());
-				defaultChannel.getOutputStreams().add(out);
-				Thread t = new Thread(new ClientHandler(clientSocket));
+				Thread t = new Thread(new ClientHandler(clientSocket, defaultChannel));
 				t.start();
-				System.out.println("[" + clientSocket + "] connected.");
+				//System.out.println("[" + clientSocket + "] connected.");
 			}
 			
 		} catch (Exception ex) {
@@ -93,19 +98,23 @@ public class Server {
 		
 	}
 
-	public void notifyAllUsers(String user) {
-		Iterator channelIt = allChannels.iterator();
-		Channel ch = null;
+	public void notifyAllUsers(Channel ch, User u) {
+		Iterator channelIt = channelList.iterator();
 		PrintWriter out = null;
+		User usr = null;
 
 		while (channelIt.hasNext()) {
 			ch = (Channel) channelIt.next();
-			Iterator userIt = ch.getOutputStreams().iterator();
+			Iterator userIt = ch.getAllUsers().iterator();
 			while(userIt.hasNext()) {
+				usr = (User) userIt.next();
 				try {
-					out = (PrintWriter) userIt.next();
-					out.println("** User " + user + " joined #default channel");
-					out.flush();
+					if (!usr.getUsername().equals(u.getUsername())) {
+						out = usr.getUserOutputStream();
+						out.println("** User " + u.getUsername() +
+								" joined " + ch.getName() + " channel");
+						out.flush();
+					}
 				} catch (Exception e1) {
 					e1.printStackTrace();
 				}
@@ -113,20 +122,22 @@ public class Server {
 		}
 	}
 
-	public void sendAllInChannel(Channel ch, String message) {
-		ArrayList channelOutputStreams = ch.getOutputStreams();
-		Iterator it = channelOutputStreams.iterator();
+	public void sendAllInChannel(Channel ch, User u, String message) {
+		ArrayList users = ch.getAllUsers();
+		Iterator userIt = users.iterator();
 		PrintWriter out = null;
+		User usr = null;
 
-		synchronized(channelOutputStreams) {
-			while(it.hasNext()) {
-				try {
-					out = (PrintWriter) it.next();
+		while(userIt.hasNext()) {
+			usr = (User) userIt.next();
+			try {
+				if (!usr.getUsername().equals(u.getUsername())) {
+					out = usr.getUserOutputStream();
 					out.println(message);
 					out.flush();
-				} catch (Exception e1) {
-					e1.printStackTrace();
 				}
+			} catch (Exception e1) {
+				e1.printStackTrace();
 			}
 		}
 	}

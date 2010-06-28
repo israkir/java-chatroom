@@ -1,10 +1,6 @@
 import java.io.BufferedReader;
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.io.OutputStream;
 import java.io.PrintWriter;
 import java.net.Socket;
 import java.net.UnknownHostException;
@@ -14,13 +10,14 @@ import java.util.logging.Logger;
 
 public class Client implements Runnable {
 	private Socket socket;
-	PrintWriter out = null;
-	BufferedReader in = null;
-	BufferedReader stdin = null;
+	private String nickname;
+	PrintWriter out;
+	BufferedReader in;
+	BufferedReader stdin;
 	String userInput;
+	String channel = "default";
 
 	public Client(String host, int port) {
-		String nickname = null;
 		boolean login = true;
 
 		try {
@@ -36,11 +33,11 @@ public class Client implements Runnable {
 
 			while((userInput = stdin.readLine()) != null) {
 				if (login) {
-					nickname = userInput;
-					out.println(nickname);
+					setNickname(userInput);
+					out.println(userInput);
 					login = false;
 				} else {
-					out.println(userInput);
+					out.println(nickname + ": " + userInput);
 				}
 			}
 
@@ -72,6 +69,10 @@ public class Client implements Runnable {
 		} catch (IOException ex) {
 			Logger.getLogger(Client.class.getName()).log(Level.SEVERE, null, ex);
 		}
+	}
+
+	public void setNickname(String nickname) {
+		this.nickname = nickname;
 	}
 
 }
