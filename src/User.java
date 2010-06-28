@@ -39,6 +39,10 @@ public class User {
 		blockedUsers.add(username);
 	}
 
+	public void removeBlockedUser(String username) {
+		blockedUsers.remove(username);
+	}
+
 	public boolean isBlocked(String username) {
 		if (this.blockedUsers.contains(username))
 			return true;

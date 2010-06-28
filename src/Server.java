@@ -56,6 +56,12 @@ public class Server {
 					if (message.contains(": /tell")) {
 						commandTell(userChannel, message);
 						notifyUserChannel(user);
+					} else if (message.contains(": /ignore")) {
+						commandIgnore(userChannel, user, message);
+						notifyUserChannel(user);
+					} else if (message.contains(": /unignore")) {
+						commandUnignore(userChannel, user, message);
+						notifyUserChannel(user);
 					} else {
 						System.out.println("Sending all: [" + message + "]...");
 						sendAllInChannel(userChannel, user, message);
@@ -77,10 +83,24 @@ public class Server {
 			for(int i=3; i<separate.length; i++)
 				message += separate[i] + " ";
 
-			tellUser(ch, username, message);
+			messagePrivate(ch, username, message);
 		}
 
-		public void tellUser(Channel ch, String username, String message) {
+		public void commandIgnore(Channel ch, User u, String m) {
+			String[] separate = m.split(" ");
+			String ignoreUsername = separate[2];
+			ch.getUser(u.getUsername()).addBlockedUser(ignoreUsername);
+			notifyUser(user, ignoreUsername, 1);
+		}
+
+		public void commandUnignore(Channel ch, User u, String m) {
+			String[] separate = m.split(" ");
+			String unignoreUsername = separate[2];
+			ch.getUser(u.getUsername()).removeBlockedUser(unignoreUsername);
+			notifyUser(user, unignoreUsername, 2);
+		}
+
+		public void messagePrivate(Channel ch, String username, String message) {
 			User u = null;
 			PrintWriter out = null;
 
@@ -164,7 +184,8 @@ public class Server {
 		for (Iterator i = keys.iterator(); i.hasNext(); ) {
 			usr = ch.getUser((String) i.next());
 			try {
-				if (!usr.getUsername().equals(u.getUsername())) {
+				if (!usr.getUsername().equals(u.getUsername()) &&
+						!usr.isBlocked(u.getUsername())) {
 					out = usr.getUserOutputStream();
 					out.println(message + "\n#" + usr.getCurrentChannel() + ":> ");
 					out.flush();
@@ -188,11 +209,19 @@ public class Server {
  		return true;
 	}
 
-	public void notifyError(User u, int i) {
+	public void notifyUser(User u, String s, int i) {
 		PrintWriter out = u.getUserOutputStream();
 		switch(i) {
 			case 0:
 				out.println("Error:login");
+				out.flush();
+				break;
+			case 1:
+				out.println("** All messages from " + s + " will be discarded");
+				out.flush();
+				break;
+			case 2:
+				out.println("** All messages from " + s + " will be shown");
 				out.flush();
 				break;
 		}
