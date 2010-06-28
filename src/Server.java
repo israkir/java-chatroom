@@ -62,6 +62,12 @@ public class Server {
 					} else if (message.contains(": /unignore")) {
 						commandUnignore(userChannel, user, message);
 						notifyUserChannel(user);
+					} else if (message.contains(": /listall")) {
+						commandListAll(user);
+						notifyUserChannel(user);
+					} else if (message.contains(": /list")) {
+						commandList(user,message);
+						notifyUserChannel(user);
 					} else {
 						System.out.println("Sending all: [" + message + "]...");
 						sendAllInChannel(userChannel, user, message);
@@ -98,6 +104,38 @@ public class Server {
 			String unignoreUsername = separate[2];
 			ch.getUser(u.getUsername()).removeBlockedUser(unignoreUsername);
 			notifyUser(user, unignoreUsername, 2);
+		}
+
+		public void commandListAll(User u) {
+			Iterator channelIt = channelList.iterator();
+			PrintWriter out = null;
+			Channel ch = null;
+
+			while (channelIt.hasNext()) {
+				ch = (Channel) channelIt.next();
+				out = u.getUserOutputStream();
+				out.println(ch.listUsersInChannel());
+				out.flush();
+			}
+		}
+
+		public void commandList(User u, String m) {
+			String[] separate = m.split(" ");
+			String channelName = separate[2];
+			Iterator channelIt = channelList.iterator();
+			PrintWriter out = null;
+			Channel ch = null;
+
+			while (channelIt.hasNext()) {
+				ch = (Channel) channelIt.next();
+				if (ch.getName().equals(channelName)) {
+					out = u.getUserOutputStream();
+					out.println(ch.listUsersInChannel());
+					out.flush();
+				} else {
+					notifyUser(user, channelName, 3);
+				}
+			}
 		}
 
 		public void messagePrivate(Channel ch, String username, String message) {
@@ -222,6 +260,10 @@ public class Server {
 				break;
 			case 2:
 				out.println("** All messages from " + s + " will be shown");
+				out.flush();
+				break;
+			case 3:
+				out.println("** Channel " + s + " does not exist");
 				out.flush();
 				break;
 		}

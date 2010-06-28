@@ -27,16 +27,18 @@ public class Channel {
 	public HashMap<String, User> getAllUsers() {
 		return this.users;
 	}
+	
+	public String listUsersInChannel() {
+		Set keys = this.users.keySet();
+		Iterator it = keys.iterator();
+		String all = "";
 
-	/*
-	public void listUsersInChannel() {
-		//Iterator it = users.`
 		while(it.hasNext()) {
-			User u = (User) it.next();
-			System.out.println("** " + u.getUsername() + " in " + this.name);
+			String u = (String) it.next();
+			all += "** " + u + " in " + this.name + "\n";
 		}
+		return all.substring(0, all.length()-1);
 	}
-	*/
 	
 	public User getUser(String username) {
 		if (this.users.containsKey(username))
