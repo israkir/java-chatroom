@@ -14,13 +14,15 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Set;
+import java.util.Timer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
 
 public class Server {
-	private ArrayList<Channel> channelList = new ArrayList<Channel>();
+	public static ArrayList<Channel> channelList = new ArrayList<Channel>();
 	private ServerSocket ss;
+	public static int slots = 0;
 	Channel defaultChannel;
 
 	public class ClientHandler implements Runnable {
@@ -59,6 +61,7 @@ public class Server {
 							notifyAllUsers(user);
 							System.out.println(nickname + " login from " +
 											clientSocket.getLocalSocketAddress() + " @ " + today);
+							slots++;
 						} else {
 							notifyUser(user, null, 0);
 							user.setLogin(true);
@@ -90,12 +93,10 @@ public class Server {
 					} else if (message.contains(": /quit")) {
 						commandQuit(user.getCurrentChannel(), user);
 					} else if (!message.contains("LOGIN:>")) {
-						//System.out.println("islogin(): " + user.isLogin());
-						System.out.println("Sending all: [" + message + "]...");
+						//System.out.println("Sending all: [" + message + "]...");
 						sendAllInChannel(user.getCurrentChannel(), user, message);
 						notifyUserChannel(user);
 					}
-					
 				}
 			} catch (Exception ex) {
 				ex.printStackTrace();
@@ -111,6 +112,13 @@ public class Server {
 						System.out.println(user.getUsername() + " logout @ " + now);
 						break;
 					}
+				}
+				slots--;
+				if ((ch.showNumberOfUsers() == 0) &&
+						!ch.getName().equals("default")) {
+					channelList.remove(ch);
+					System.out.println(ch.getName() + " destroyed by " +
+							user.getUsername() + " @ " + today);
 				}
 			}
 		}
@@ -335,7 +343,14 @@ public class Server {
 					out = u.getUserOutputStream();
 					out.println("** You are disconnected");
 					out.flush();
+					break;
 				}
+			}
+			if ((ch.showNumberOfUsers() == 0) &&
+					!ch.getName().equals("default")) {
+				channelList.remove(ch);
+				System.out.println(ch.getName() + " destroyed by " +
+				u.getUsername() + " @ " + today);
 			}
 			System.out.println(u.getUsername() + " logout @ " + today);
 		}
@@ -390,7 +405,10 @@ public class Server {
 			new File("default").mkdir();
 			channelList.add(defaultChannel);
 
+			Timer timer = new Timer();
+
 			while(true) {
+				timer.schedule(new Task(channelList, slots), 0, 4000);
 				clientSocket = ss.accept();
 				Thread t = new Thread(new ClientHandler(clientSocket, defaultChannel));
 				t.start();
