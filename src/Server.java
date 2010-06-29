@@ -1,5 +1,4 @@
 import java.io.BufferedOutputStream;
-import java.io.FileNotFoundException;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.io.BufferedReader;
@@ -15,8 +14,6 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Set;
-import java.util.Timer;
-import java.util.TimerTask;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -32,7 +29,6 @@ public class Server {
 		User user;
 		Channel userChannel;
 		BufferedReader in;
-		boolean login = true;
 
 		public ClientHandler(Socket s, Channel ch) {
 			try {
@@ -53,16 +49,21 @@ public class Server {
 			String today = sdf.format(date);
 
 			try {
-				nickname = in.readLine();
-				user.setUsername(nickname);
-				userChannel.addUser(user);
-				notifyAllUsers(user);
-				System.out.println(nickname + " login from " +
-								clientSocket.getLocalSocketAddress() + " @ " + today);
-				notifyUserChannel(user);
-
 				while((message = in.readLine()) != null) {
-					if (message.contains(": /tell")) {
+					if (message.contains("LOGIN:>") && user.isLogin()) {
+						nickname = message.substring(8, message.length());
+						if (isValid(user, nickname)) {
+							user.setUsername(nickname);
+							userChannel.addUser(user);
+							notifyUserChannel(user);
+							notifyAllUsers(user);
+							System.out.println(nickname + " login from " +
+											clientSocket.getLocalSocketAddress() + " @ " + today);
+						} else {
+							notifyUser(user, null, 0);
+							user.setLogin(true);
+						}
+					} else if (message.contains(": /tell")) {
 						commandTell(user.getCurrentChannel(), message);
 						notifyUserChannel(user);
 					} else if (message.contains(": /ignore")) {
@@ -88,7 +89,8 @@ public class Server {
 						notifyUserChannel(user);
 					} else if (message.contains(": /quit")) {
 						commandQuit(user.getCurrentChannel(), user);
-					} else {
+					} else if (!message.contains("LOGIN:>")) {
+						//System.out.println("islogin(): " + user.isLogin());
 						System.out.println("Sending all: [" + message + "]...");
 						sendAllInChannel(user.getCurrentChannel(), user, message);
 						notifyUserChannel(user);
@@ -98,6 +100,29 @@ public class Server {
 			} catch (Exception ex) {
 				ex.printStackTrace();
 			}
+		}
+
+		public boolean isValid(User u, String name) {
+			Iterator channelIt = channelList.iterator();
+			Channel ch = null;
+			String s = null;
+
+			if (name.contains(" "))
+				return false;
+
+			while (channelIt.hasNext()) {
+				ch = (Channel) channelIt.next();
+				Set keys = ch.getAllUsers().keySet();
+				Iterator userIt = keys.iterator();
+				while (userIt.hasNext()) {
+					s = (String) userIt.next();
+					if (s.equals(name))
+						return false;
+				}
+			}
+			
+			u.setLogin(false);
+			return true;
 		}
 
 		public void commandTell(String channelName, String m) {
@@ -416,24 +441,11 @@ public class Server {
 		}	
 	}
 
-	public boolean isAvailable(Channel ch, String name) {
-		Set keys = ch.getAllUsers().keySet();
-		Iterator userIt = keys.iterator();
-		User usr = null;
-
-		while (userIt.hasNext()) {
-			usr = (User) userIt.next();
-			if (usr.getUsername().equals(name))
-				return false;
-		}
- 		return true;
-	}
-
 	public void notifyUser(User u, String s, int i) {
 		PrintWriter out = u.getUserOutputStream();
 		switch(i) {
 			case 0:
-				out.println("Error:login");
+				out.println("** Error: username invalid");
 				out.flush();
 				break;
 			case 1:

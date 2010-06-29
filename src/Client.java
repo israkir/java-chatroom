@@ -34,15 +34,16 @@ public class Client implements Runnable {
 			System.out.print("LOGIN:> ");
 			stdin = new BufferedReader(new InputStreamReader(System.in));
 
-			userInput = stdin.readLine();
-			setNickname(userInput);
-			out.println(userInput);
-
 			while((userInput = stdin.readLine()) != null) {
-				if (userInput.contains(" /up")) {
-					uploadFile(nickname, userInput);
+				if (login) {
+					//userInput = stdin.readLine();
+					setNickname(userInput);
+					out.println("LOGIN:> " + userInput);
 				} else {
 					out.println(nickname + ": " + userInput);
+				}
+				if (userInput.contains(" /up")) {
+					uploadFile(nickname, userInput);
 				}
 			}
 
@@ -69,6 +70,11 @@ public class Client implements Runnable {
 				if (serverMessage.equals("** You are disconnected")) {
 					socket.close();
 					System.exit(1);
+				}
+				if (serverMessage.equals("** Error: username invalid")) {
+					System.out.print("LOGIN:> ");
+				} else {
+					login = false;
 				}
 			}
 		} catch (IOException ex) {

@@ -5,11 +5,12 @@ import java.util.ArrayList;
 
 
 public class User {
-	Socket userSocket;
-	String name;
-	String currentChannel;
-	ArrayList blockedUsers;
-	PrintWriter out;
+	private Socket userSocket;
+	private String name;
+	private String currentChannel;
+	private ArrayList blockedUsers;
+	private PrintWriter out;
+	private boolean login = true;
 
 	User(Socket socket, String channel) throws IOException {
 		this.userSocket = socket;
@@ -20,6 +21,14 @@ public class User {
 
 	public void setUsername(String name) {
 		this.name = name;
+	}
+
+	public void setLogin(boolean b) {
+		this.login = b;
+	}
+
+	public boolean isLogin() {
+		return this.login;
 	}
 
 	public String getUsername() {
