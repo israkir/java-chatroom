@@ -194,6 +194,7 @@ public class Server {
 			Iterator channelIt = channelList.iterator();
 			PrintWriter out = null;
 			Channel ch = null;
+			boolean isChPresent = false;
 
 			while (channelIt.hasNext()) {
 				ch = (Channel) channelIt.next();
@@ -201,10 +202,15 @@ public class Server {
 					out = u.getUserOutputStream();
 					out.println(ch.listUsersInChannel());
 					out.flush();
-				} else {
-					notifyUser(user, channelName, 3);
+					isChPresent = true;
+					break;
 				}
 			}
+
+			if (!isChPresent) {
+				notifyUser(user, channelName, 3);
+			}
+
 		}
 
 		public void commandJoin(User u, String m) {

@@ -43,8 +43,8 @@ public class Channel {
 		String all = "";
 
 		while(it.hasNext()) {
-			String u = (String) it.next();
-			all += "** " + u + " in " + this.name + "\n";
+			User u = this.users.get(it.next());
+			all += "** " + u.getUsername() + " in " + this.name + "\n";
 		}
 		return all.substring(0, all.length()-1);
 	}
