@@ -99,6 +99,19 @@ public class Server {
 				}
 			} catch (Exception ex) {
 				ex.printStackTrace();
+			} finally {
+				Date d = new Date();
+				String now = sdf.format(d);
+				Iterator channelIt = channelList.iterator();
+				Channel ch = null;
+				while (channelIt.hasNext()) {
+					ch = (Channel) channelIt.next();
+					if (ch.getName().equals(user.getCurrentChannel())) {
+						ch.removeUser(user.getUsername());
+						System.out.println(user.getUsername() + " logout @ " + now);
+						break;
+					}
+				}
 			}
 		}
 
@@ -323,8 +336,8 @@ public class Server {
 					out.println("** You are disconnected");
 					out.flush();
 				}
-				System.out.println(u.getUsername() + " logout @ " + today);
 			}
+			System.out.println(u.getUsername() + " logout @ " + today);
 		}
 
 		public void receiveFile(String channelName, String filename) {
