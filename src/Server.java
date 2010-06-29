@@ -1,9 +1,9 @@
+import java.net.ServerSocket;
+import java.net.Socket;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
-import java.net.ServerSocket;
-import java.net.Socket;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
@@ -18,6 +18,9 @@ public class Server {
 	Channel defaultChannel;
 
 	public class ClientHandler implements Runnable {
+		SimpleDateFormat sdf = new SimpleDateFormat("EEE, d MMM yyyy HH:mm:ss Z");
+		Date date = new Date();
+		String today = sdf.format(date);
 		Socket clientSocket;
 		User user;
 		Channel userChannel;
@@ -37,9 +40,6 @@ public class Server {
 
 		@Override
 		public void run() {
-			SimpleDateFormat sdf = new SimpleDateFormat("EEE, d MMM yyyy HH:mm:ss Z");
-			Date date = new Date();
-			String today = sdf.format(date);
 			String message = null;
 			String nickname = null;
 
@@ -47,7 +47,7 @@ public class Server {
 				nickname = in.readLine();
 				user.setUsername(nickname);
 				userChannel.addUser(user);
-				notifyAllUsers(userChannel, user);
+				notifyAllUsers(user);
 				System.out.println(nickname + " login from " +
 								clientSocket.getLocalSocketAddress() + " @ " + today);
 				notifyUserChannel(user);
@@ -66,11 +66,17 @@ public class Server {
 						commandListAll(user);
 						notifyUserChannel(user);
 					} else if (message.contains(": /list")) {
-						commandList(user,message);
+						commandList(user, message);
+						notifyUserChannel(user);
+					} else if (message.contains(": /join")) {
+						commandJoin(user, message);
+						notifyUserChannel(user);
+					} else if (message.contains(": /channels")) {
+						commandChannels(user);
 						notifyUserChannel(user);
 					} else {
 						System.out.println("Sending all: [" + message + "]...");
-						sendAllInChannel(userChannel, user, message);
+						sendAllInChannel(user.getCurrentChannel(), user, message);
 						notifyUserChannel(user);
 					}
 					
@@ -138,6 +144,47 @@ public class Server {
 			}
 		}
 
+		public void commandJoin(User u, String m) {
+			String[] separate = m.split(" ");
+			String channelName = separate[2];
+			Channel ch = null;
+			Channel newCh = null;
+
+			ArrayList<Channel> channelListReplica =
+									new ArrayList<Channel>(channelList);
+
+			Iterator channelIt = channelListReplica.iterator();
+			while (channelIt.hasNext()) {
+				ch = (Channel) channelIt.next();
+				if (ch.getName().equals(channelName)) {
+					u.setCurrentChannel(channelName);
+					notifyUser(user, channelName, 4);
+				} else {
+					newCh = new Channel(channelName);
+					channelList.add(newCh);
+					newCh.addUser(u);
+					ch.removeUser(u.getUsername());
+					u.setCurrentChannel(newCh.getName());
+					notifyUser(user, channelName, 4);
+					System.out.println("Channel " + newCh.getName() +
+							" is created by " + u.getUsername() + " @ " + today);
+				}
+			}
+		}
+
+		public void commandChannels(User u) {
+			Iterator channelIt = channelList.iterator();
+			PrintWriter out = null;
+			Channel ch = null;
+
+			while (channelIt.hasNext()) {
+				ch = (Channel) channelIt.next();
+				out = u.getUserOutputStream();
+				out.println(ch.getName() + " (" + ch.showNumberOfUsers() + " users)");
+				out.flush();
+			}
+		}
+
 		public void messagePrivate(Channel ch, String username, String message) {
 			User u = null;
 			PrintWriter out = null;
@@ -188,10 +235,11 @@ public class Server {
 		
 	}
 
-	public void notifyAllUsers(Channel ch, User u) {
+	public void notifyAllUsers(User u) {
 		Iterator channelIt = channelList.iterator();
 		PrintWriter out = null;
 		User usr = null;
+		Channel ch = null;
 
 		while (channelIt.hasNext()) {
 			ch = (Channel) channelIt.next();
@@ -213,25 +261,29 @@ public class Server {
 		}
 	}
 
-	public void sendAllInChannel(Channel ch, User u, String message) {
-		HashMap<String, User> users = ch.getAllUsers();
-		Set keys = ch.getAllUsers().keySet();
+	public void sendAllInChannel(String channelName, User u, String message) {
+		Iterator channelIt = channelList.iterator();
+		HashMap<String, User> users = null;
 		PrintWriter out = null;
+		Channel ch = null;
 		User usr = null;
 
-		for (Iterator i = keys.iterator(); i.hasNext(); ) {
-			usr = ch.getUser((String) i.next());
-			try {
-				if (!usr.getUsername().equals(u.getUsername()) &&
-						!usr.isBlocked(u.getUsername())) {
-					out = usr.getUserOutputStream();
-					out.println(message + "\n#" + usr.getCurrentChannel() + ":> ");
-					out.flush();
+		while (channelIt.hasNext()) {
+			ch = (Channel) channelIt.next();
+			if (ch.getName().equals(channelName)) {
+				users = ch.getAllUsers();
+				Set keys = users.keySet();
+				for (Iterator i = keys.iterator(); i.hasNext();) {
+					usr = ch.getUser((String) i.next());
+					if (!usr.getUsername().equals(u.getUsername())) {
+						out = usr.getUserOutputStream();
+						out.println(message + "\n#" +
+									usr.getCurrentChannel() + ":> ");
+						out.flush();
+					}
 				}
-			} catch (Exception e1) {
-				e1.printStackTrace();
 			}
-		}
+		}	
 	}
 
 	public boolean isAvailable(Channel ch, String name) {
@@ -264,6 +316,10 @@ public class Server {
 				break;
 			case 3:
 				out.println("** Channel " + s + " does not exist");
+				out.flush();
+				break;
+			case 4:
+				out.println("** " + u.getUsername() + " joined " + s);
 				out.flush();
 				break;
 		}

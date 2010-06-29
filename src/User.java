@@ -1,4 +1,3 @@
-
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.net.Socket;
@@ -29,6 +28,10 @@ public class User {
 
 	public String getCurrentChannel() {
 		return this.currentChannel;
+	}
+
+	public void setCurrentChannel(String channel) {
+		this.currentChannel = channel;
 	}
 
 	public PrintWriter getUserOutputStream() {
