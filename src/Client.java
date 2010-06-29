@@ -1,6 +1,11 @@
+import java.io.BufferedInputStream;
 import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.io.PrintWriter;
 import java.net.Socket;
 import java.net.UnknownHostException;
@@ -15,7 +20,6 @@ public class Client implements Runnable {
 	BufferedReader in;
 	BufferedReader stdin;
 	String userInput;
-	String channel = "default";
 	boolean login = true;
 
 	public Client(String host, int port) {	
@@ -35,7 +39,11 @@ public class Client implements Runnable {
 			out.println(userInput);
 
 			while((userInput = stdin.readLine()) != null) {
-				out.println(nickname + ": " + userInput);
+				if (userInput.contains(" /up")) {
+					uploadFile(nickname, userInput);
+				} else {
+					out.println(nickname + ": " + userInput);
+				}
 			}
 
 		} catch (UnknownHostException e) {
@@ -58,6 +66,10 @@ public class Client implements Runnable {
 		try {
 			while ((serverMessage = in.readLine()) != null) {
 				System.out.println(serverMessage);
+				if (serverMessage.equals("** You are disconnected")) {
+					socket.close();
+					System.exit(1);
+				}
 			}
 		} catch (IOException ex) {
 			Logger.getLogger(Client.class.getName()).log(Level.SEVERE, null, ex);
@@ -66,6 +78,32 @@ public class Client implements Runnable {
 
 	public void setNickname(String nickname) {
 		this.nickname = nickname;
+	}
+
+	public void uploadFile(String nickname, String m) throws IOException {
+		FileInputStream fis = null;
+		try {
+			String[] separate = m.split(" ");
+			String filename = separate[1];
+			File file = new File(filename);
+			byte[] byteArray = new byte[(int) file.length()];
+			fis = new FileInputStream(file);
+			BufferedInputStream bis = new BufferedInputStream(fis);
+			bis.read(byteArray, 0, byteArray.length);
+			OutputStream os = socket.getOutputStream();
+			System.out.println("Sending " + filename + " ...");
+			os.write(byteArray, 0, byteArray.length);
+			os.flush();
+		} catch (FileNotFoundException ex) {
+			Logger.getLogger(Client.class.getName()).log(Level.SEVERE, null, ex);
+		} finally {
+			try {
+				fis.close();
+			} catch (IOException ex) {
+				Logger.getLogger(Client.class.getName()).log(Level.SEVERE, null, ex);
+			}
+		}
+		
 	}
 
 }

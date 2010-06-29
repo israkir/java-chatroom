@@ -1,7 +1,12 @@
+import java.io.BufferedOutputStream;
+import java.io.FileNotFoundException;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.text.SimpleDateFormat;
@@ -10,6 +15,10 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Set;
+import java.util.Timer;
+import java.util.TimerTask;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 
 public class Server {
@@ -19,8 +28,6 @@ public class Server {
 
 	public class ClientHandler implements Runnable {
 		SimpleDateFormat sdf = new SimpleDateFormat("EEE, d MMM yyyy HH:mm:ss Z");
-		Date date = new Date();
-		String today = sdf.format(date);
 		Socket clientSocket;
 		User user;
 		Channel userChannel;
@@ -42,6 +49,8 @@ public class Server {
 		public void run() {
 			String message = null;
 			String nickname = null;
+			Date date = new Date();
+			String today = sdf.format(date);
 
 			try {
 				nickname = in.readLine();
@@ -54,7 +63,7 @@ public class Server {
 
 				while((message = in.readLine()) != null) {
 					if (message.contains(": /tell")) {
-						commandTell(userChannel, message);
+						commandTell(user.getCurrentChannel(), message);
 						notifyUserChannel(user);
 					} else if (message.contains(": /ignore")) {
 						commandIgnore(userChannel, user, message);
@@ -74,6 +83,11 @@ public class Server {
 					} else if (message.contains(": /channels")) {
 						commandChannels(user);
 						notifyUserChannel(user);
+					} else if (message.contains(": /up")) {
+						commandUpload(user, message);
+						notifyUserChannel(user);
+					} else if (message.contains(": /quit")) {
+						commandQuit(user.getCurrentChannel(), user);
 					} else {
 						System.out.println("Sending all: [" + message + "]...");
 						sendAllInChannel(user.getCurrentChannel(), user, message);
@@ -86,16 +100,47 @@ public class Server {
 			}
 		}
 
-		public void commandTell(Channel ch, String m) {
+		public void commandTell(String channelName, String m) {
 			String[] separate = m.split(" ");
-			String username = separate[2];
-			String message = separate[0].substring(0,
-									separate[0].length()-1) + " tells you: ";
+			String sender = separate[0].substring(0,separate[0].length()-1);
+			String receiver = separate[2];
+			String message = sender + " tells you: ";
+			boolean found = false;
 
 			for(int i=3; i<separate.length; i++)
 				message += separate[i] + " ";
 
-			messagePrivate(ch, username, message);
+			Iterator channelIt = channelList.iterator();
+			Channel ch = null;
+			User u = null;
+			PrintWriter out = null;
+
+			while (channelIt.hasNext()) {
+				ch = (Channel) channelIt.next();
+				if (ch.getName().equals(channelName)) {
+					if ((u = ch.getUser(receiver)) != null) {
+						out = u.getUserOutputStream();
+						out.println(message + "\n#" + u.getCurrentChannel() + ":> ");
+						out.flush();
+						found = true;
+						break;
+					}
+				}
+			}
+
+			if (!found) {
+				while (channelIt.hasNext()) {
+					ch = (Channel) channelIt.next();
+					if (ch.getName().equals(channelName)) {
+						User s = ch.getUser(sender);
+						out = s.getUserOutputStream();
+						out.println("Warning:" + receiver + " is not in channel!" +
+											"\n#" + u.getCurrentChannel() + ":> ");
+						out.flush();
+						break;
+					}
+				}
+			}
 		}
 
 		public void commandIgnore(Channel ch, User u, String m) {
@@ -148,7 +193,12 @@ public class Server {
 			String[] separate = m.split(" ");
 			String channelName = separate[2];
 			Channel ch = null;
+			Channel chIn = null;
 			Channel newCh = null;
+			String leavingCh = null;
+			Date date = new Date();
+			String today = sdf.format(date);
+			boolean isChPresent = false;
 
 			ArrayList<Channel> channelListReplica =
 									new ArrayList<Channel>(channelList);
@@ -157,18 +207,33 @@ public class Server {
 			while (channelIt.hasNext()) {
 				ch = (Channel) channelIt.next();
 				if (ch.getName().equals(channelName)) {
+					leavingCh = u.getCurrentChannel();
+					Iterator it = channelList.iterator();
+					while (it.hasNext()) {
+						chIn = (Channel) it.next();
+						if (chIn.getName().equals(leavingCh)) {
+							chIn.removeUser(u.getUsername());
+						} else if (chIn.getName().equals(channelName)) {
+							chIn.addUser(u);
+						}
+					}
 					u.setCurrentChannel(channelName);
 					notifyUser(user, channelName, 4);
-				} else {
-					newCh = new Channel(channelName);
-					channelList.add(newCh);
-					newCh.addUser(u);
-					ch.removeUser(u.getUsername());
-					u.setCurrentChannel(newCh.getName());
-					notifyUser(user, channelName, 4);
-					System.out.println("Channel " + newCh.getName() +
-							" is created by " + u.getUsername() + " @ " + today);
+					isChPresent = true;
+					break;
 				}
+			}
+
+			if (!isChPresent) {
+				newCh = new Channel(channelName);
+				new File(channelName).mkdir();
+				channelList.add(newCh);
+				newCh.addUser(u);
+				ch.removeUser(u.getUsername());
+				u.setCurrentChannel(newCh.getName());
+				notifyUser(user, channelName, 4);
+				System.out.println("Channel " + newCh.getName() +
+						" is created by " + u.getUsername() + " @ " + today);
 			}
 		}
 
@@ -180,38 +245,77 @@ public class Server {
 			while (channelIt.hasNext()) {
 				ch = (Channel) channelIt.next();
 				out = u.getUserOutputStream();
-				out.println(ch.getName() + " (" + ch.showNumberOfUsers() + " users)");
+				out.println("** " + ch.getName() + " (" + ch.showNumberOfUsers() + " users)");
 				out.flush();
 			}
 		}
 
-		public void messagePrivate(Channel ch, String username, String message) {
-			User u = null;
+		public void commandUpload(User u, String m) {
+			String[] separate = m.split(" ");
+			String filename = separate[2];
+
+			receiveFile(u.getCurrentChannel(), filename);
+		}
+
+		public void commandQuit(String channelName, User u) {
+			Iterator channelIt = channelList.iterator();
 			PrintWriter out = null;
+			Channel ch = null;
+			Date date = new Date();
+			String today = sdf.format(date);
 
-			if ((u = ch.getUser(username)) != null) {
-				out = u.getUserOutputStream();
-				out.println(message + "\n#" + u.getCurrentChannel() + ":> ");
-				out.flush();
-			} else {
-				out = u.getUserOutputStream();
-				out.println("Warning:" + username + " is not in channel!" +
-									"\n#" + u.getCurrentChannel() + ":> ");
-				out.flush();
+			synchronized(channelList) {
+				while (channelIt.hasNext()) {
+					ch = (Channel) channelIt.next();
+					if (ch.getName().equals(channelName)) {
+						ch.removeUser(u.getUsername());
+					}
+					out = u.getUserOutputStream();
+					out.println("** You are disconnected");
+					out.flush();
+				}
+				System.out.println(u.getUsername() + " logout @ " + today);
 			}
 		}
 
+		public void receiveFile(String channelName, String filename) {
+			try {
+				FileOutputStream fos = null;
+				int bytesRead;
+				int current = 0;
+				byte[] byteArray = new byte[6022386];
+				InputStream is = null;
+				is = clientSocket.getInputStream();
+				fos = new FileOutputStream(filename);
+				BufferedOutputStream bos = new BufferedOutputStream(fos);
+				bytesRead = is.read(byteArray, 0, byteArray.length);
+				current = bytesRead;
+				while (bytesRead > -1) {
+					bytesRead = is.read(byteArray, current, byteArray.length - current);
+					if (bytesRead >= 0) {
+						current += bytesRead;
+					}
+				}
+				bos.write(byteArray, 0, current);
+				bos.flush();
+				bos.close();
+			} catch (IOException ex) {
+				Logger.getLogger(Server.class.getName()).log(Level.SEVERE, null, ex);
+			}
+			
+		}
 	}
 	
 	public static void main(String[] args) {
-		//int port = Integer.parseInt(args[0]);
 		int port = 80;
+		//int port = Integer.parseInt(args[0]);
 		try {
 			new Server().listen(port);
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
 	}
+
 
 	private void listen(int port) throws IOException {
 		Socket clientSocket = null;
@@ -221,6 +325,7 @@ public class Server {
 			System.out.println("Server is listening on: " +
 					ss.getLocalSocketAddress());
 			defaultChannel = new Channel("default");
+			new File("default").mkdir();
 			channelList.add(defaultChannel);
 
 			while(true) {
