@@ -66,10 +66,10 @@ public class Server {
 						commandTell(user.getCurrentChannel(), message);
 						notifyUserChannel(user);
 					} else if (message.contains(": /ignore")) {
-						commandIgnore(userChannel, user, message);
+						commandIgnore(user.getCurrentChannel(), user, message);
 						notifyUserChannel(user);
 					} else if (message.contains(": /unignore")) {
-						commandUnignore(userChannel, user, message);
+						commandUnignore(user.getCurrentChannel(), user, message);
 						notifyUserChannel(user);
 					} else if (message.contains(": /listall")) {
 						commandListAll(user);
@@ -143,18 +143,36 @@ public class Server {
 			}
 		}
 
-		public void commandIgnore(Channel ch, User u, String m) {
+		public void commandIgnore(String channelName, User u, String m) {
 			String[] separate = m.split(" ");
 			String ignoreUsername = separate[2];
-			ch.getUser(u.getUsername()).addBlockedUser(ignoreUsername);
-			notifyUser(user, ignoreUsername, 1);
+			Iterator channelIt = channelList.iterator();
+			Channel ch = null;
+
+			while (channelIt.hasNext()) {
+				ch = (Channel) channelIt.next();
+				if (ch.getName().equals(channelName)) {
+					ch.getUser(u.getUsername()).addBlockedUser(ignoreUsername);
+					notifyUser(u, ignoreUsername, 1);
+					break;
+				}
+			}
 		}
 
-		public void commandUnignore(Channel ch, User u, String m) {
+		public void commandUnignore(String channelName, User u, String m) {
 			String[] separate = m.split(" ");
 			String unignoreUsername = separate[2];
-			ch.getUser(u.getUsername()).removeBlockedUser(unignoreUsername);
-			notifyUser(user, unignoreUsername, 2);
+			Iterator channelIt = channelList.iterator();
+			Channel ch = null;
+			
+			while (channelIt.hasNext()) {
+				ch = (Channel) channelIt.next();
+				if (ch.getName().equals(channelName)) {
+					ch.getUser(u.getUsername()).removeBlockedUser(unignoreUsername);
+					notifyUser(u, unignoreUsername, 1);
+					break;
+				}
+			}
 		}
 
 		public void commandListAll(User u) {
@@ -380,7 +398,8 @@ public class Server {
 				Set keys = users.keySet();
 				for (Iterator i = keys.iterator(); i.hasNext();) {
 					usr = ch.getUser((String) i.next());
-					if (!usr.getUsername().equals(u.getUsername())) {
+					if (!usr.getUsername().equals(u.getUsername()) &&
+						!usr.isBlocked(u.getUsername())) {
 						out = usr.getUserOutputStream();
 						out.println(message + "\n#" +
 									usr.getCurrentChannel() + ":> ");
